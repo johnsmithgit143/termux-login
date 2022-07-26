@@ -1,118 +1,116 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+#include <termios.h>
+#include <signal.h>
 
-#define BUFSIZE 1024
-#define PWDFILELOCATION "/data/data/com.termux/files/usr/etc/termux-login-pwd"
+#define PWDFILEPATH "/data/data/com.termux/files/usr/etc/termux-login-pwd"
+#define BUFSIZE 4096
 
-int inputandparse(char buf[]);
-int writefile(void);
-int readfileandparse(char user[], char host[], char pass[]);
-int loginprompt(char user[], char host[], char pass[]);
+bool prompt(char buf[], const char msg[]);
+bool gnu_getpass(char buf[]);
+bool createfile(char buf[]);
+bool readfile(char buf[], char user[], char host[], char pass[]);
+bool login(char buf[], char user[], char host[], char pass[]);
 
 int main(void)
 {
+	char buf[BUFSIZE];
 	char user[BUFSIZE];
 	char host[BUFSIZE];
 	char pass[BUFSIZE];
 	
-	if (readfileandparse(user, host, pass) && loginprompt(user, host, pass))
-	{
-		return 0;
-	}
-	else
-	{
-		if (writefile() && readfileandparse(user, host, pass) && loginprompt(user, host, pass))
-		{
-			return 0;
-		}
-	}
+	signal(SIGINT, SIG_IGN);
+	signal(SIGTSTP, SIG_IGN);
 	
+	while (!readfile(buf, user, host, pass))
+	{
+		createfile(buf);
+	}
+	if (login(buf, user, host, pass))
+		return 0;
 	return 1;
 }
 
-int inputandparse(char buf[])
+bool prompt(char buf[], const char msg[])
 {
-	while (1)
+	while (true)
 	{
+		printf("%s", msg);
 		if (fgets(buf, BUFSIZE, stdin))
 		{
 			buf[strcspn(buf, "\n")] = 0;
 			if (buf[0] == '\0')
 			{
-				fprintf(stderr, "String is empty.\nPlease try again: ");
+				fprintf(stderr, "\nMust not be empty.\n");
 			}
 			else
 			{
 				if (strchr(buf, ':'))
 				{
-					fprintf(stderr, "String contains ':'.\nI don't know how to escape this, sorry.\nDon't use ':' until I figure out how to escape it.\nPlease try again: ");
-				}
-				else
-				{
-					return 1;
-				}
+					fprintf(stderr, "Illegal character ':'.\n");
+			 	}
+				else return true;
 			}
 		}
-		else
-		{
-			fprintf(stderr, "fgets failed in inputandparse().\n");
-			return 0;
-		}
+		else return false;
 	}
 }
 
-int writefile(void)
+bool gnu_getpass(char buf[])
 {
-	char buf[BUFSIZE];
-	FILE *pwdfile = fopen(PWDFILELOCATION, "w");
+    struct termios old, new;
+    bool success = false;
+
+    if (tcgetattr(0, &old) != 0)
+        return false;
+    new = old;
+    new.c_lflag &= ~ECHO;
+    if (tcsetattr(0, TCSAFLUSH, &new) != 0)
+        return false;
+
+    if (prompt(buf, "Password: "))
+    	success = true;
+    
+    (void) tcsetattr(0, TCSAFLUSH, &old);
+
+    return success;
+}
+
+bool createfile(char buf[])
+{
+	FILE *pwdfile = fopen(PWDFILEPATH, "w");
+	bool success = true;
 	
-	printf("Creating new termux-login-pwd file.\n");
+	printf("Creating new user credentials.\n");
 	if (pwdfile)
 	{
-		printf("Enter new username: ");
-		if (inputandparse(buf))
-		{
+		if (prompt(buf, "Enter new Username: "))
 			fprintf(pwdfile, "%s:", buf);
-		}
-		else
-		{
-			fclose(pwdfile);
-			return 0;
-		}
-		printf("Enter new hostname: ");
-		if (inputandparse(buf))
-		{
+		else success = false;
+		if (prompt(buf, "Enter new Hostname: "))
 			fprintf(pwdfile, "%s:", buf);
-		}
-		else
-		{
-			fclose(pwdfile);
-			return 0;
-		}
-		printf("Enter new password: ");
-		if (inputandparse(buf))
-		{
+		else success = false;
+		printf("Enter new ");
+		if (gnu_getpass(buf))
 			fprintf(pwdfile, "%s\n", buf);
-			fclose(pwdfile);
-			return 1;
-		}
-		else
-		{
-			fclose(pwdfile);
-			return 0;
-		}
+		else success = false;
 	}
-	else
+	else	
 	{
-		fprintf(stderr, "fopen writefile failed.\n");
-		return 0;
+		fprintf(stderr, "fopen() in createfile() failed.\n");
+		return false;
 	}
+	printf("\n");
+	fclose(pwdfile);
+	return success;
 }
 
-int readfileandparse(char user[], char host[], char pass[])
+bool readfile(char buf[], char user[], char host[], char pass[])
 {
-	char buf[BUFSIZE];
-	char *token;
-	FILE *pwdfile = fopen(PWDFILELOCATION, "r");
+	char *token = NULL;
+	bool success = true;
+	FILE *pwdfile = fopen(PWDFILEPATH, "r");
 	
 	if (pwdfile)
 	{
@@ -121,93 +119,54 @@ int readfileandparse(char user[], char host[], char pass[])
 			buf[strcspn(buf, "\n")] = 0;
 			token = strtok(buf, ":");
 			if (token)
-			{
 				strcpy(user, token);
-			}
-			else
-			{
-				fprintf(stderr, "Username parsing failed.\n");
-				fclose(pwdfile);
-				return 0;
-			}
+			else success = false;
 			token = strtok(NULL, ":");
 			if (token)
-			{
 				strcpy(host, token);
-			}
-			else
-			{
-				fprintf(stderr, "Hostname parsing failed.\n");
-				fclose(pwdfile);
-				return 0;
-			}
+			else success = false;
 			token = strtok(NULL, ":");
 			if (token)
-			{
 				strcpy(pass, token);
-				fclose(pwdfile);
-				return 1;
-			}
-			else
-			{
-				fprintf(stderr, "Passname parsing failed.\n");
-				fclose(pwdfile);
-				return 0;
-			}
+			else success = false;
 		}
-		else
-		{
-			fprintf(stderr, "fgets failed in readfileandparse().\n");
-			fclose(pwdfile);
-			return 0;
-		}
+		else success = false;
 	}
 	else
 	{
-		fprintf(stderr, "fopen readfileandparse failed.\n");
-		return 0;
+		fprintf(stderr, "fopen() in createfile() failed.\n");
+		return false;
 	}
+	fclose(pwdfile);
+	if (!success)
+	{
+		fprintf(stderr, "Error parsing file in readfile()\n");
+		return false;
+	}
+	return true;
 }
 
-int loginprompt(char user[], char host[], char pass[])
+bool login (char buf[], char user[], char host[], char pass[])
 {
-	char buf[BUFSIZE];
-	int usermatch = 0;
-	int passmatch = 0;
+	bool usermatch = false;
+	bool passmatch = false;
 	
-	printf("termux-login made by johnsmithgit143\n\n");
+	printf("termux-login by johnsmithgit143\n\n");
 	
 	while (!usermatch || !passmatch)
 	{
-		printf("%s login: ", host);
-		if (inputandparse(buf))
-		{
-			if (strcmp(buf, user) == 0)
-			{
-				usermatch = 1;
-			}
-		}
-		else
-		{
-			return 0;
-		}
-		printf("Password: ");
-		if (inputandparse(buf))
-		{
-			if (strcmp(buf, pass) == 0)
-			{
-				passmatch = 1;
-			}
-			else
-			{
-				printf("\nIncorrect password.\n\n");
-			}
-		}
-		else
-		{
-			return 0;
-		}
+		usermatch = false;
+		passmatch = false;
+		printf("%s ", host);
+		if (prompt(buf, "login: "))
+			usermatch = (strcmp(buf, user) == 0);
+		else return false;
+		if (gnu_getpass(buf))
+			passmatch = (strcmp(buf, pass) == 0);
+		else return false;
+		if (!usermatch || !passmatch)
+			fprintf(stderr, "\n\nIncorrect Password.\n\n");
 	}
-	printf("\nSuccessful login.\n");
-	return 1;
+	printf("\n\nSuccessful Login.\n\n");
+	return true;
 }
