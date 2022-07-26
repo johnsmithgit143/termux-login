@@ -1,15 +1,15 @@
-## termux-login
----
-A login for Termux for security
+# termux-login
+A login for Termux for security (nope this is unsecure)
 Written in C.
 I am new with C, please tell me bugs.
-## Installation
----
+This project is just me learning C.
+# Installation
 Compile the .c file or just run the executable.
-## Warning
----
-The login does not catch sig int, that means you can just ctrl-c and bypass login.
-Password is echoed and is stored in plain text
-## Why release this unfinished?
----
-because it is working prototype, but i am polishing it, please be patient
+# Warning
+You can just ctrl-d and bypass it.
+
+Password is unencrypted (I tested encryption code but wont compile, idk how to fix)
+
+There is no sleep after wrong password, I tried but it breaks program badly.
+# Why release this unfinished?
+it is working prototype, i might re write this in go
