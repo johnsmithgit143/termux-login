@@ -19,6 +19,7 @@ int main(void)
 	char user[BUFSIZE];
 	char host[BUFSIZE];
 	char pass[BUFSIZE];
+	bool success;
 	
 	signal(SIGINT, SIG_IGN);
 	signal(SIGTSTP, SIG_IGN);
@@ -27,9 +28,8 @@ int main(void)
 	{
 		createfile(buf);
 	}
-	if (login(buf, user, host, pass))
-		return 0;
-	return 1;
+	success = login(buf, user, host, pass);
+	return success;
 }
 
 bool prompt(char buf[], const char msg[])
@@ -53,7 +53,7 @@ bool prompt(char buf[], const char msg[])
 				else return true;
 			}
 		}
-		else return false;
+		else printf("\n\nIncorrect Password.\n\n");
 	}
 }
 
@@ -150,6 +150,7 @@ bool login (char buf[], char user[], char host[], char pass[])
 {
 	bool usermatch = false;
 	bool passmatch = false;
+	strcat(host, " login: ");
 	
 	printf("termux-login by johnsmithgit143\n\n");
 	
@@ -157,8 +158,7 @@ bool login (char buf[], char user[], char host[], char pass[])
 	{
 		usermatch = false;
 		passmatch = false;
-		printf("%s ", host);
-		if (prompt(buf, "login: "))
+		if (prompt(buf, host))
 			usermatch = (strcmp(buf, user) == 0);
 		else return false;
 		if (gnu_getpass(buf))
