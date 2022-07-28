@@ -160,13 +160,13 @@ bool login (char buf[], char user[], char host[], char pass[])
 		passmatch = false;
 		if (prompt(buf, host))
 			usermatch = (strcmp(buf, user) == 0);
-		else return false;
+		else return true;
 		if (gnu_getpass(buf))
 			passmatch = (strcmp(buf, pass) == 0);
-		else return false;
+		else return true;
 		if (!usermatch || !passmatch)
 			fprintf(stderr, "\n\nIncorrect Password.\n\n");
 	}
 	printf("\n\nSuccessful Login.\n\n");
-	return true;
+	return false;
 }
